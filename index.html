@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Chat</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="node_modules/highlight.js/styles/github.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+      <div class="modal-content">
+        <h2>Settings</h2>
+        <div class="form-group">
+          <label for="api-key">Claude API Key:</label>
+          <input type="password" id="api-key" placeholder="Enter your API key">
+        </div>
+        <div class="form-group">
+          <label for="model-select">Model:</label>
+          <select id="model-select">
+            <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet</option>
+            <option value="claude-3-5-sonnet-20240620">Claude 3.5 Sonnet</option>
+            <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+            <option value="claude-3-5-haiku-20240307">Claude 3.5 Haiku</option>
+          </select>
+        </div>
+        <div class="modal-buttons">
+          <button id="save-settings" class="primary-button">Save</button>
+          <button id="close-settings" class="secondary-button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>Claude Chat</h2>
+        <button id="new-chat" class="primary-button">New Chat</button>
+      </div>
+      <div class="chat-history" id="chat-history">
+        <!-- Chat history will be populated here -->
+      </div>
+      <div class="sidebar-footer">
+        <button id="open-settings" class="settings-button">Settings</button>
+        <button id="export-chat-btn" class="settings-button">Export Chat</button>
+      </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="chat-container">
+      <div class="chat-messages" id="chat-messages">
+        <div class="welcome-message">
+          <h1>Welcome to Claude Chat</h1>
+          <p>Start a conversation with Claude by typing your message below.</p>
+        </div>
+        <!-- Messages will be displayed here -->
+      </div>
+      
+      <div class="chat-input-container">
+        <textarea id="user-input" placeholder="Type your message here..." rows="3"></textarea>
+        <button id="send-message" class="send-button" disabled>Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

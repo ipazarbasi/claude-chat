@@ -1,0 +1,29 @@
+{
+  "name": "electron-claude-chat",
+  "version": "1.0.0",
+  "description": "Chat application for Claude.ai",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.15.0",
+    "electron-store": "^8.1.0",
+    "highlight.js": "^11.9.0",
+    "marked": "^9.1.5",
+    "marked-highlight": "^2.0.6"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.6.4"
+  },
+  "build": {
+    "appId": "com.electron.claude-chat",
+    "linux": {
+      "target": ["AppImage", "deb"]
+    }
+  }
+}
