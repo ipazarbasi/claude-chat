@@ -132,7 +132,7 @@ function setupEventListeners() {
   });
 
   // Search input listener
-  searchChatsInput.addEventListener('input', () => {
+  searchChatsInput.addEventListener("input", () => {
     updateChatHistorySidebar(); // Re-render sidebar with filter
   });
 
@@ -157,7 +157,6 @@ async function createNewChat() {
   // Generate a unique ID for this chat
   currentChatId = Date.now().toString();
 
-
   // Add to chat history object
   chatHistory[currentChatId] = {
     title: "New Chat",
@@ -180,10 +179,6 @@ async function createNewChat() {
   // Clear input
   userInput.value = "";
   userInput.focus();
-
-  // Save the updated chat history (with the new empty chat)
-  // DO NOT SAVE HERE: A chat is only saved when the first message is sent.
-  // await saveCurrentChatHistory();
 }
 
 // Update the chat history sidebar
@@ -249,11 +244,13 @@ function updateChatHistorySidebar() {
 }
 
 // Load a chat from history
-function loadChat(chatId) { // No longer needs to be async
+function loadChat(chatId) {
+  // No longer needs to be async
   if (!chatHistory[chatId] || currentChatId === chatId) return;
 
   const previousChatId = currentChatId;
-  if (previousChatId !== chatId) { // Only cleanup if switching to a different chat
+  if (previousChatId !== chatId) {
+    // Only cleanup if switching to a different chat
     cleanupPreviousEmptyNewChat(previousChatId);
   }
 
@@ -310,10 +307,13 @@ async function saveSettings() {
 async function deleteChat(chatIdToDelete) {
   if (!chatHistory[chatIdToDelete]) return;
 
-  // Optional: Add a confirmation dialog
-  // if (!confirm(`Are you sure you want to delete "${chatHistory[chatIdToDelete].title}"?`)) {
-  //   return;
-  // }
+  if (
+    !confirm(
+      `Are you sure you want to delete "${chatHistory[chatIdToDelete].title}"?`
+    )
+  ) {
+    return;
+  }
 
   const isDeletingCurrentChat = currentChatId === chatIdToDelete;
 
