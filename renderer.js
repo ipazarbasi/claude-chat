@@ -55,23 +55,14 @@ async function init() {
     if (storedHistory && Object.keys(storedHistory).length > 0) {
       chatHistory = storedHistory;
       updateChatHistorySidebar();
-
-      // Try to load the last active chat or the newest one
-      // We'll need to store lastActiveChatId or determine it. For now, let's load the newest.
-      const chatIds = Object.keys(chatHistory).sort(
-        (a, b) => parseInt(b) - parseInt(a)
-      ); // Sort by newest first
-      if (chatIds.length > 0) {
-        currentChatId = chatIds[0]; // Load the most recent chat
-        loadChat(currentChatId);
-      } else {
-        // This case should ideally not be reached if storedHistory has keys
-        await createNewChat();
-      }
+      // Even if history exists, start with a new chat as per new requirement
+      await createNewChat();
     } else {
-      // No existing chats or empty history object, create a new one
+      // No existing chats, create a new one
       await createNewChat();
     }
+    // Ensure a new chat is created if, for some reason, chatHistory was loaded but createNewChat wasn't hit.
+    // Or, simply always create a new chat after loading history for the sidebar.
 
     setupEventListeners();
   } catch (error) {
@@ -253,8 +244,9 @@ function updateChatHistorySidebar() {
 }
 
 // Load a chat from history
-function loadChat(chatId) {
+function loadChat(chatId) { // No longer needs to be async
   if (!chatHistory[chatId]) return;
+  // if (currentChatId === chatId && chatMessages.children.length > 1) return; // Avoid reloading if already active and not empty
 
   currentChatId = chatId;
   updateChatHistorySidebar();
