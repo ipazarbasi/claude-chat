@@ -130,6 +130,16 @@ ipcMain.handle('export-chat-dialog', async (event, chatContent) => {
       return { success: false, error: error.message };
     }
   }
-  
+
   return { success: false, error: 'Export cancelled' };
+});
+
+// Handle chat history storage
+ipcMain.handle('save-chat-history', async (event, history) => {
+  store.set('chatHistory', history);
+  return true;
+});
+
+ipcMain.handle('get-chat-history', async (event) => {
+  return store.get('chatHistory');
 });

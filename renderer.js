@@ -38,22 +38,36 @@ const exportChatButton = document.getElementById('export-chat-btn');
 // Initialize the app
 async function init() {
   try {
-    // Load API key from storage
     apiKey = await ipcRenderer.invoke('get-api-key');
-
     if (apiKey) {
       initializeAnthropicClient(apiKey);
       apiKeyInput.value = apiKey;
       sendButton.disabled = false;
     } else {
-      // Show settings modal if no API key is found
       settingsModal.style.display = 'flex';
     }
 
-    // Create a new chat session
-    createNewChat();
+    // Load chat history
+    const storedHistory = await ipcRenderer.invoke('get-chat-history');
+    if (storedHistory && Object.keys(storedHistory).length > 0) {
+      chatHistory = storedHistory;
+      updateChatHistorySidebar();
 
-    // Set up event listeners
+      // Try to load the last active chat or the newest one
+      // We'll need to store lastActiveChatId or determine it. For now, let's load the newest.
+      const chatIds = Object.keys(chatHistory).sort((a, b) => parseInt(b) - parseInt(a)); // Sort by newest first
+      if (chatIds.length > 0) {
+        currentChatId = chatIds[0]; // Load the most recent chat
+        loadChat(currentChatId);
+      } else {
+        // This case should ideally not be reached if storedHistory has keys
+        await createNewChat();
+      }
+    } else {
+      // No existing chats or empty history object, create a new one
+      await createNewChat();
+    }
+
     setupEventListeners();
   } catch (error) {
     console.error('Initialization error:', error);
@@ -90,7 +104,7 @@ function setupEventListeners() {
   });
 
   // New chat button
-  newChatButton.addEventListener('click', createNewChat);
+  newChatButton.addEventListener('click', async () => await createNewChat());
 
   // Settings modal
   openSettingsButton.addEventListener('click', () => {
@@ -119,8 +133,18 @@ function setupEventListeners() {
   ipcRenderer.on('export-chat', exportChat);
 }
 
+// Save chat history to store
+async function saveCurrentChatHistory() {
+  try {
+    await ipcRenderer.invoke('save-chat-history', chatHistory);
+  } catch (error) {
+    console.error('Failed to save chat history:', error);
+    // Optionally, display a non-intrusive error message to the user
+  }
+}
+
 // Create a new chat
-function createNewChat() {
+async function createNewChat() {
   // Generate a unique ID for this chat
   currentChatId = Date.now().toString();
 
@@ -133,17 +157,22 @@ function createNewChat() {
   // Update chat history sidebar
   updateChatHistorySidebar();
 
-  // Clear chat messages
-  chatMessages.innerHTML = `
-    <div class="welcome-message">
-      <h1>Welcome to Claude Chat</h1>
-      <p>Start a conversation with Claude by typing your message below.</p>
-    </div>
+  // Clear chat messages and show welcome for the new chat
+  chatMessages.innerHTML = ''; // Clear previous content
+  const welcomeMessageDiv = document.createElement('div');
+  welcomeMessageDiv.className = 'welcome-message';
+  welcomeMessageDiv.innerHTML = `
+    <h1>Chat: ${chatHistory[currentChatId].title}</h1>
+    <p>This chat is empty. Start a conversation by typing your message below.</p>
   `;
+  chatMessages.appendChild(welcomeMessageDiv);
 
   // Clear input
   userInput.value = '';
   userInput.focus();
+
+  // Save the updated chat history (with the new empty chat)
+  await saveCurrentChatHistory();
 }
 
 // Update the chat history sidebar
@@ -153,16 +182,30 @@ function updateChatHistorySidebar() {
   Object.keys(chatHistory).forEach(chatId => {
     const chat = chatHistory[chatId];
     const chatItem = document.createElement('div');
-    chatItem.className = `chat-item ${chatId === currentChatId ? 'active' : ''}`;
-    chatItem.textContent = chat.title;
+    chatItem.className = `chat-item-container ${chatId === currentChatId ? 'active' : ''}`;
     chatItem.dataset.chatId = chatId;
 
-    chatItem.addEventListener('click', () => {
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'chat-item-title';
+    titleSpan.textContent = chat.title;
+    titleSpan.addEventListener('click', () => {
       loadChat(chatId);
     });
 
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'chat-item-delete-btn';
+    deleteButton.innerHTML = '&#10005;'; // Cross mark
+    deleteButton.title = 'Delete Chat';
+    deleteButton.addEventListener('click', (event) => {
+      event.stopPropagation(); // Prevent chatItem click event
+      deleteChat(chatId);
+    });
+
+    chatItem.appendChild(titleSpan);
+    chatItem.appendChild(deleteButton);
     chatHistoryContainer.appendChild(chatItem);
   });
+
 }
 
 // Load a chat from history
@@ -172,17 +215,29 @@ function loadChat(chatId) {
   currentChatId = chatId;
   updateChatHistorySidebar();
 
-  // Clear current chat
   chatMessages.innerHTML = '';
 
-  // Display all messages
-  chatHistory[chatId].messages.forEach(msg => {
-    if (msg.role === 'user') {
-      displayUserMessage(msg.content);
-    } else {
-      displayAssistantMessage(msg.content);
-    }
-  });
+  const currentChat = chatHistory[chatId];
+  if (currentChat.messages.length === 0) {
+    // If the chat is empty, show a welcome/info message for this specific chat
+    const welcomeMessageDiv = document.createElement('div');
+    welcomeMessageDiv.className = 'welcome-message';
+    welcomeMessageDiv.innerHTML = `
+      <h1>Chat: ${currentChat.title}</h1>
+      <p>This chat is empty. Start a conversation by typing your message below.</p>
+    `;
+    chatMessages.appendChild(welcomeMessageDiv);
+  } else {
+    // Display all messages
+    currentChat.messages.forEach(msg => {
+      if (msg.role === 'user') {
+        displayUserMessage(msg.content);
+      } else {
+        displayAssistantMessage(msg.content);
+      }
+    });
+  }
+  userInput.focus();
 }
 
 // Save settings
@@ -203,6 +258,35 @@ async function saveSettings() {
     }
   } else {
     displayError('API key cannot be empty.');
+  }
+}
+
+// Delete a chat from history
+async function deleteChat(chatIdToDelete) {
+  if (!chatHistory[chatIdToDelete]) return;
+
+  // Optional: Add a confirmation dialog
+  // if (!confirm(`Are you sure you want to delete "${chatHistory[chatIdToDelete].title}"?`)) {
+  //   return;
+  // }
+
+  const isDeletingCurrentChat = currentChatId === chatIdToDelete;
+
+  delete chatHistory[chatIdToDelete];
+  await saveCurrentChatHistory();
+
+  if (isDeletingCurrentChat) {
+    currentChatId = null;
+    const remainingChatIds = Object.keys(chatHistory).sort((a, b) => parseInt(b) - parseInt(a));
+    if (remainingChatIds.length > 0) {
+      loadChat(remainingChatIds[0]); // Load the newest remaining chat
+    } else {
+      await createNewChat(); // Create a new chat if none are left
+    }
+  } else {
+    // If we deleted a non-active chat, just refresh the sidebar
+    // The active chat remains the same, so no need to call loadChat()
+    updateChatHistorySidebar();
   }
 }
 
@@ -231,6 +315,7 @@ async function sendMessage() {
       chatHistory[currentChatId].title = message.substring(0, 30) + (message.length > 30 ? '...' : '');
       updateChatHistorySidebar();
     }
+    await saveCurrentChatHistory(); // Save after adding user message and updating title
 
     // Add loading indicator
     const loadingElement = document.createElement('div');
@@ -270,6 +355,7 @@ async function sendMessage() {
         role: 'assistant',
         content: assistantResponse
       });
+      await saveCurrentChatHistory(); // Save after adding assistant's message
 
     } catch (error) {
       // Remove loading indicator
@@ -297,7 +383,7 @@ async function sendMessage() {
     displayError('Failed to send message. Please try again.');
   } finally {
     isWaitingForResponse = false;
-    sendButton.disabled = !userInput.value.trim();
+    sendButton.disabled = !userInput.value.trim() || !apiKey;
   }
 }
 
