@@ -151,8 +151,12 @@ async function saveCurrentChatHistory() {
 
 // Create a new chat
 async function createNewChat() {
+  const previousChatId = currentChatId; // Store current before overwriting
+  cleanupPreviousEmptyNewChat(previousChatId); // Clean up if previous was an empty new chat
+
   // Generate a unique ID for this chat
   currentChatId = Date.now().toString();
+
 
   // Add to chat history object
   chatHistory[currentChatId] = {
@@ -178,7 +182,8 @@ async function createNewChat() {
   userInput.focus();
 
   // Save the updated chat history (with the new empty chat)
-  await saveCurrentChatHistory();
+  // DO NOT SAVE HERE: A chat is only saved when the first message is sent.
+  // await saveCurrentChatHistory();
 }
 
 // Update the chat history sidebar
@@ -245,8 +250,12 @@ function updateChatHistorySidebar() {
 
 // Load a chat from history
 function loadChat(chatId) { // No longer needs to be async
-  if (!chatHistory[chatId]) return;
-  // if (currentChatId === chatId && chatMessages.children.length > 1) return; // Avoid reloading if already active and not empty
+  if (!chatHistory[chatId] || currentChatId === chatId) return;
+
+  const previousChatId = currentChatId;
+  if (previousChatId !== chatId) { // Only cleanup if switching to a different chat
+    cleanupPreviousEmptyNewChat(previousChatId);
+  }
 
   currentChatId = chatId;
   updateChatHistorySidebar();
@@ -325,6 +334,22 @@ async function deleteChat(chatIdToDelete) {
     // If we deleted a non-active chat, just refresh the sidebar
     // The active chat remains the same, so no need to call loadChat()
     updateChatHistorySidebar();
+  }
+}
+
+// Helper function to remove an empty "New Chat" if it was not interacted with
+function cleanupPreviousEmptyNewChat(chatIdToClean) {
+  if (
+    chatIdToClean &&
+    chatHistory[chatIdToClean] &&
+    chatHistory[chatIdToClean].messages.length === 0 &&
+    chatHistory[chatIdToClean].title === "New Chat" // Check if it's still the default "New Chat"
+  ) {
+    delete chatHistory[chatIdToClean];
+    // The sidebar will be updated by the calling function (loadChat or createNewChat)
+    // which typically calls updateChatHistorySidebar() after this.
+    // If not, and immediate sidebar update is needed here, uncomment:
+    // updateChatHistorySidebar();
   }
 }
 
