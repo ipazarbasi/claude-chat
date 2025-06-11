@@ -169,8 +169,24 @@ body {
   position: relative;
 }
 
-.message-text pre code {
+/* Styling for inline code snippets */
+.message-text code {
+  background-color: #f0f0f0; /* Light grey background for inline code */
   font-family: "Fira Code", "Fira Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.9em; /* Slightly smaller to differentiate */
+  color: #c7254e; /* A common color for inline code text (e.g., Bootstrap's pinkish red) */
+}
+
+/* Ensure code block's <code> tag (styled by highlight.js) overrides inline styles */
+.message-text pre code {
+  background-color: transparent; /* Code blocks get background from <pre> or hljs theme */
+  font-family: "Fira Code", "Fira Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  padding: 0; /* Reset padding, <pre> tag handles it for blocks */
+  border-radius: 0; /* Reset radius */
+  font-size: 1em; /* Reset font size to be relative to <pre> */
+  color: inherit; /* Color is handled by highlight.js theme */
 }
 
 pre > code {
