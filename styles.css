@@ -188,20 +188,23 @@ pre > code {
 
 .code-copy-btn {
   position: absolute;
-  top: 5px;
-  right: 5px;
-  background-color: #fff;
-  border: 1px solid #ddd;
+  top: 8px; /* Slightly more offset */
+  right: 8px; /* Slightly more offset */
+  background-color: #e0e0e0; /* Darker, more distinct background */
+  border: 1px solid #ccc; /* Slightly darker border */
   border-radius: 4px;
-  padding: 3px 8px;
-  font-size: 12px;
+  padding: 6px; /* Slightly more padding for the icon */
   cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 0.2s;
+  opacity: 0.85; /* Increased default opacity for better visibility */
+  transition: opacity 0.2s, background-color 0.2s;
+  line-height: 0; /* Helps align SVG if it has extra space */
+  color: #333; /* Icon color */
+  z-index: 1; /* Ensure button is above the <pre> element */
 }
 
 .code-copy-btn:hover {
   opacity: 1;
+  background-color: #d0d0d0; /* Darken slightly on hover */
 }
 
 .chat-input-container {
