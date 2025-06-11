@@ -8,7 +8,7 @@ const store = new Store();
 
 let mainWindow;
 
-function createWindow() {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -19,6 +19,12 @@ function createWindow() {
   });
 
   mainWindow.loadFile("index.html");
+
+  // Add context menu
+  const { default: contextMenu } = await import('electron-context-menu');
+  contextMenu({
+    window: mainWindow
+  });
 
   // Open DevTools if in development
   // mainWindow.webContents.openDevTools();
