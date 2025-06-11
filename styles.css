@@ -170,11 +170,16 @@ body {
 }
 
 .message-text pre code {
-  font-family: "Fira Code", "Fira Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace
+  font-family: "Fira Code", "Fira Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
 }
 
 pre > code {
-    font-family: "Fira Code", "Fira Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace
+  font-family: "Fira Code", "Fira Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+
+/* Ensure all spans within highlighted code blocks inherit the monospace font from their parent <code> element. */
+.message-text pre code.hljs span {
+  font-family: inherit;
 }
 
 .code-block-wrapper {
