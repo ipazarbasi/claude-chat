@@ -1,61 +1,65 @@
-const { ipcRenderer } = require('electron');
-const { Anthropic } = require('@anthropic-ai/sdk');
-const { marked } = require('marked');
-const { markedHighlight } = require('marked-highlight');
-const hljs = require('highlight.js');
+const { ipcRenderer } = require("electron");
+const { Anthropic } = require("@anthropic-ai/sdk");
+const { marked } = require("marked");
+const { markedHighlight } = require("marked-highlight");
+const hljs = require("highlight.js");
 
 // Configure marked with syntax highlighting
-marked.use(markedHighlight({
-  langPrefix: 'hljs language-',
-  highlight(code, lang) {
-    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-    return hljs.highlight(code, { language }).value;
-  }
-}));
+marked.use(
+  markedHighlight({
+    langPrefix: "hljs language-",
+    highlight(code, lang) {
+      const language = hljs.getLanguage(lang) ? lang : "plaintext";
+      return hljs.highlight(code, { language }).value;
+    },
+  })
+);
 
 // Global variables
 let anthropicClient = null;
 let apiKey = null;
-let selectedModel = 'claude-3-7-sonnet-latest';
+let selectedModel = "claude-3-7-sonnet-latest";
 let currentChatId = null;
 let chatHistory = {};
 let isWaitingForResponse = false;
 
 // DOM Elements
-const chatMessages = document.getElementById('chat-messages');
-const userInput = document.getElementById('user-input');
-const sendButton = document.getElementById('send-message');
-const newChatButton = document.getElementById('new-chat');
-const settingsModal = document.getElementById('settings-modal');
-const openSettingsButton = document.getElementById('open-settings');
-const closeSettingsButton = document.getElementById('close-settings');
-const saveSettingsButton = document.getElementById('save-settings');
-const apiKeyInput = document.getElementById('api-key');
-const modelSelect = document.getElementById('model-select');
-const chatHistoryContainer = document.getElementById('chat-history');
-const exportChatButton = document.getElementById('export-chat-btn');
+const chatMessages = document.getElementById("chat-messages");
+const userInput = document.getElementById("user-input");
+const sendButton = document.getElementById("send-message");
+const newChatButton = document.getElementById("new-chat");
+const settingsModal = document.getElementById("settings-modal");
+const openSettingsButton = document.getElementById("open-settings");
+const closeSettingsButton = document.getElementById("close-settings");
+const saveSettingsButton = document.getElementById("save-settings");
+const apiKeyInput = document.getElementById("api-key");
+const modelSelect = document.getElementById("model-select");
+const chatHistoryContainer = document.getElementById("chat-history");
+const exportChatButton = document.getElementById("export-chat-btn");
 
 // Initialize the app
 async function init() {
   try {
-    apiKey = await ipcRenderer.invoke('get-api-key');
+    apiKey = await ipcRenderer.invoke("get-api-key");
     if (apiKey) {
       initializeAnthropicClient(apiKey);
       apiKeyInput.value = apiKey;
       sendButton.disabled = false;
     } else {
-      settingsModal.style.display = 'flex';
+      settingsModal.style.display = "flex";
     }
 
     // Load chat history
-    const storedHistory = await ipcRenderer.invoke('get-chat-history');
+    const storedHistory = await ipcRenderer.invoke("get-chat-history");
     if (storedHistory && Object.keys(storedHistory).length > 0) {
       chatHistory = storedHistory;
       updateChatHistorySidebar();
 
       // Try to load the last active chat or the newest one
       // We'll need to store lastActiveChatId or determine it. For now, let's load the newest.
-      const chatIds = Object.keys(chatHistory).sort((a, b) => parseInt(b) - parseInt(a)); // Sort by newest first
+      const chatIds = Object.keys(chatHistory).sort(
+        (a, b) => parseInt(b) - parseInt(a)
+      ); // Sort by newest first
       if (chatIds.length > 0) {
         currentChatId = chatIds[0]; // Load the most recent chat
         loadChat(currentChatId);
@@ -70,8 +74,10 @@ async function init() {
 
     setupEventListeners();
   } catch (error) {
-    console.error('Initialization error:', error);
-    displayError('Failed to initialize the application. Please check your settings.');
+    console.error("Initialization error:", error);
+    displayError(
+      "Failed to initialize the application. Please check your settings."
+    );
   }
 }
 
@@ -79,66 +85,69 @@ async function init() {
 function initializeAnthropicClient(key) {
   try {
     anthropicClient = new Anthropic({
-      apiKey: key
+      apiKey: key,
     });
   } catch (error) {
-    console.error('Failed to initialize Anthropic client:', error);
-    displayError('Failed to initialize Anthropic client. Please check your API key.');
+    console.error("Failed to initialize Anthropic client:", error);
+    displayError(
+      "Failed to initialize Anthropic client. Please check your API key."
+    );
   }
 }
 
 // Set up event listeners
 function setupEventListeners() {
   // Send message on button click or Enter key (without shift)
-  sendButton.addEventListener('click', sendMessage);
-  userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  sendButton.addEventListener("click", sendMessage);
+  userInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   });
 
   // Enable/disable send button based on input
-  userInput.addEventListener('input', () => {
-    sendButton.disabled = !userInput.value.trim() || !apiKey || isWaitingForResponse;
+  userInput.addEventListener("input", () => {
+    sendButton.disabled =
+      !userInput.value.trim() || !apiKey || isWaitingForResponse;
   });
 
   // New chat button
-  newChatButton.addEventListener('click', async () => await createNewChat());
+  newChatButton.addEventListener("click", async () => await createNewChat());
 
   // Settings modal
-  openSettingsButton.addEventListener('click', () => {
-    settingsModal.style.display = 'flex';
+  openSettingsButton.addEventListener("click", () => {
+    settingsModal.style.display = "flex";
   });
 
-  closeSettingsButton.addEventListener('click', () => {
-    settingsModal.style.display = 'none';
+  closeSettingsButton.addEventListener("click", () => {
+    settingsModal.style.display = "none";
   });
 
-  saveSettingsButton.addEventListener('click', saveSettings);
+  saveSettingsButton.addEventListener("click", saveSettings);
 
   // Model selection
-  modelSelect.addEventListener('change', (e) => {
+  modelSelect.addEventListener("change", (e) => {
     selectedModel = e.target.value;
   });
 
   // Export chat
-  exportChatButton.addEventListener('click', exportChat);
+  exportChatButton.addEventListener("click", exportChat);
 
   // Listen for menu events
-  ipcRenderer.on('open-settings', () => {
-    settingsModal.style.display = 'flex';
+  ipcRenderer.on("open-settings", () => {
+    settingsModal.style.display = "flex";
   });
 
-  ipcRenderer.on('export-chat', exportChat);
+  ipcRenderer.on("export-chat", exportChat);
 }
 
 // Save chat history to store
 async function saveCurrentChatHistory() {
   try {
-    await ipcRenderer.invoke('save-chat-history', chatHistory);
+    await ipcRenderer.invoke("save-chat-history", chatHistory);
   } catch (error) {
-    console.error('Failed to save chat history:', error);
+    console.error("Failed to save chat history:", error);
     // Optionally, display a non-intrusive error message to the user
   }
 }
@@ -150,17 +159,17 @@ async function createNewChat() {
 
   // Add to chat history object
   chatHistory[currentChatId] = {
-    title: 'New Chat',
-    messages: []
+    title: "New Chat",
+    messages: [],
   };
 
   // Update chat history sidebar
   updateChatHistorySidebar();
 
   // Clear chat messages and show welcome for the new chat
-  chatMessages.innerHTML = ''; // Clear previous content
-  const welcomeMessageDiv = document.createElement('div');
-  welcomeMessageDiv.className = 'welcome-message';
+  chatMessages.innerHTML = ""; // Clear previous content
+  const welcomeMessageDiv = document.createElement("div");
+  welcomeMessageDiv.className = "welcome-message";
   welcomeMessageDiv.innerHTML = `
     <h1>Chat: ${chatHistory[currentChatId].title}</h1>
     <p>This chat is empty. Start a conversation by typing your message below.</p>
@@ -168,7 +177,7 @@ async function createNewChat() {
   chatMessages.appendChild(welcomeMessageDiv);
 
   // Clear input
-  userInput.value = '';
+  userInput.value = "";
   userInput.focus();
 
   // Save the updated chat history (with the new empty chat)
@@ -177,26 +186,28 @@ async function createNewChat() {
 
 // Update the chat history sidebar
 function updateChatHistorySidebar() {
-  chatHistoryContainer.innerHTML = '';
+  chatHistoryContainer.innerHTML = "";
 
-  Object.keys(chatHistory).forEach(chatId => {
+  Object.keys(chatHistory).forEach((chatId) => {
     const chat = chatHistory[chatId];
-    const chatItem = document.createElement('div');
-    chatItem.className = `chat-item-container ${chatId === currentChatId ? 'active' : ''}`;
+    const chatItem = document.createElement("div");
+    chatItem.className = `chat-item-container ${
+      chatId === currentChatId ? "active" : ""
+    }`;
     chatItem.dataset.chatId = chatId;
 
-    const titleSpan = document.createElement('span');
-    titleSpan.className = 'chat-item-title';
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "chat-item-title";
     titleSpan.textContent = chat.title;
-    titleSpan.addEventListener('click', () => {
+    titleSpan.addEventListener("click", () => {
       loadChat(chatId);
     });
 
-    const deleteButton = document.createElement('button');
-    deleteButton.className = 'chat-item-delete-btn';
-    deleteButton.innerHTML = '&#10005;'; // Cross mark
-    deleteButton.title = 'Delete Chat';
-    deleteButton.addEventListener('click', (event) => {
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "chat-item-delete-btn";
+    deleteButton.innerHTML = "&#10005;"; // Cross mark
+    deleteButton.title = "Delete Chat";
+    deleteButton.addEventListener("click", (event) => {
       event.stopPropagation(); // Prevent chatItem click event
       deleteChat(chatId);
     });
@@ -205,7 +216,6 @@ function updateChatHistorySidebar() {
     chatItem.appendChild(deleteButton);
     chatHistoryContainer.appendChild(chatItem);
   });
-
 }
 
 // Load a chat from history
@@ -215,13 +225,13 @@ function loadChat(chatId) {
   currentChatId = chatId;
   updateChatHistorySidebar();
 
-  chatMessages.innerHTML = '';
+  chatMessages.innerHTML = "";
 
   const currentChat = chatHistory[chatId];
   if (currentChat.messages.length === 0) {
     // If the chat is empty, show a welcome/info message for this specific chat
-    const welcomeMessageDiv = document.createElement('div');
-    welcomeMessageDiv.className = 'welcome-message';
+    const welcomeMessageDiv = document.createElement("div");
+    welcomeMessageDiv.className = "welcome-message";
     welcomeMessageDiv.innerHTML = `
       <h1>Chat: ${currentChat.title}</h1>
       <p>This chat is empty. Start a conversation by typing your message below.</p>
@@ -229,8 +239,8 @@ function loadChat(chatId) {
     chatMessages.appendChild(welcomeMessageDiv);
   } else {
     // Display all messages
-    currentChat.messages.forEach(msg => {
-      if (msg.role === 'user') {
+    currentChat.messages.forEach((msg) => {
+      if (msg.role === "user") {
         displayUserMessage(msg.content);
       } else {
         displayAssistantMessage(msg.content);
@@ -247,17 +257,17 @@ async function saveSettings() {
 
   if (newApiKey) {
     try {
-      await ipcRenderer.invoke('save-api-key', newApiKey);
+      await ipcRenderer.invoke("save-api-key", newApiKey);
       apiKey = newApiKey;
       initializeAnthropicClient(apiKey);
       sendButton.disabled = false;
-      settingsModal.style.display = 'none';
+      settingsModal.style.display = "none";
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      displayError('Failed to save settings. Please try again.');
+      console.error("Failed to save settings:", error);
+      displayError("Failed to save settings. Please try again.");
     }
   } else {
-    displayError('API key cannot be empty.');
+    displayError("API key cannot be empty.");
   }
 }
 
@@ -277,7 +287,9 @@ async function deleteChat(chatIdToDelete) {
 
   if (isDeletingCurrentChat) {
     currentChatId = null;
-    const remainingChatIds = Object.keys(chatHistory).sort((a, b) => parseInt(b) - parseInt(a));
+    const remainingChatIds = Object.keys(chatHistory).sort(
+      (a, b) => parseInt(b) - parseInt(a)
+    );
     if (remainingChatIds.length > 0) {
       loadChat(remainingChatIds[0]); // Load the newest remaining chat
     } else {
@@ -301,25 +313,26 @@ async function sendMessage() {
 
     // Disable input during processing
     isWaitingForResponse = true;
-    userInput.value = '';
+    userInput.value = "";
     sendButton.disabled = true;
 
     // Add user message to chat history
     chatHistory[currentChatId].messages.push({
-      role: 'user',
-      content: message
+      role: "user",
+      content: message,
     });
 
     // Update the chat title if this is the first message
     if (chatHistory[currentChatId].messages.length === 1) {
-      chatHistory[currentChatId].title = message.substring(0, 30) + (message.length > 30 ? '...' : '');
+      chatHistory[currentChatId].title =
+        message.substring(0, 30) + (message.length > 30 ? "..." : "");
       updateChatHistorySidebar();
     }
     await saveCurrentChatHistory(); // Save after adding user message and updating title
 
     // Add loading indicator
-    const loadingElement = document.createElement('div');
-    loadingElement.className = 'message assistant-message';
+    const loadingElement = document.createElement("div");
+    loadingElement.className = "message assistant-message";
     loadingElement.innerHTML = `
       <div class="message-bubble assistant-bubble loading-indicator">
         <span class="spinner"></span>
@@ -336,11 +349,12 @@ async function sendMessage() {
       const response = await anthropicClient.messages.create({
         model: selectedModel,
         max_tokens: 64000,
-        messages: chatHistory[currentChatId].messages.map(msg => ({
+        messages: chatHistory[currentChatId].messages.map((msg) => ({
           role: msg.role,
-          content: msg.content
+          content: msg.content,
         })),
-        system: "You are Claude, an AI assistant made by Anthropic. You're running in a custom Electron chat app."
+        system:
+          "You are Claude, an AI assistant made by Anthropic. You're running in a custom Electron chat app.",
       });
 
       // Remove loading indicator
@@ -352,35 +366,36 @@ async function sendMessage() {
 
       // Add assistant message to chat history
       chatHistory[currentChatId].messages.push({
-        role: 'assistant',
-        content: assistantResponse
+        role: "assistant",
+        content: assistantResponse,
       });
       await saveCurrentChatHistory(); // Save after adding assistant's message
-
     } catch (error) {
       // Remove loading indicator
       chatMessages.removeChild(loadingElement);
 
       // Handle API errors
-      console.error('API Error:', error);
-      let errorMessage = 'An error occurred while communicating with Claude.';
+      console.error("API Error:", error);
+      let errorMessage = "An error occurred while communicating with Claude.";
 
       if (error.status === 401) {
-        errorMessage = 'Invalid API key. Please check your settings.';
+        errorMessage = "Invalid API key. Please check your settings.";
       } else if (error.status === 400) {
-        errorMessage = 'Bad request: ' + (error.response?.data?.error?.message || 'Unknown error');
+        errorMessage =
+          "Bad request: " +
+          (error.response?.data?.error?.message || "Unknown error");
       } else if (error.status === 429) {
-        errorMessage = 'Rate limit exceeded. Please try again later.';
+        errorMessage = "Rate limit exceeded. Please try again later.";
       } else if (error.status >= 500) {
-        errorMessage = 'Claude service is currently unavailable. Please try again later.';
+        errorMessage =
+          "Claude service is currently unavailable. Please try again later.";
       }
 
       displayError(errorMessage);
     }
-
   } catch (error) {
-    console.error('Error sending message:', error);
-    displayError('Failed to send message. Please try again.');
+    console.error("Error sending message:", error);
+    displayError("Failed to send message. Please try again.");
   } finally {
     isWaitingForResponse = false;
     sendButton.disabled = !userInput.value.trim() || !apiKey;
@@ -389,8 +404,8 @@ async function sendMessage() {
 
 // Display user message
 function displayUserMessage(message) {
-  const messageElement = document.createElement('div');
-  messageElement.className = 'message user-message';
+  const messageElement = document.createElement("div");
+  messageElement.className = "message user-message";
   messageElement.innerHTML = `
     <div class="message-bubble user-bubble">
       <div class="message-header">You</div>
@@ -399,7 +414,7 @@ function displayUserMessage(message) {
   `;
 
   // Remove welcome message if it exists
-  const welcomeMessage = document.querySelector('.welcome-message');
+  const welcomeMessage = document.querySelector(".welcome-message");
   if (welcomeMessage) {
     chatMessages.removeChild(welcomeMessage);
   }
@@ -410,8 +425,8 @@ function displayUserMessage(message) {
 
 // Display assistant message
 function displayAssistantMessage(message) {
-  const messageElement = document.createElement('div');
-  messageElement.className = 'message assistant-message';
+  const messageElement = document.createElement("div");
+  messageElement.className = "message assistant-message";
 
   // Process markdown
   const renderedMarkdown = marked(message);
@@ -426,32 +441,35 @@ function displayAssistantMessage(message) {
   chatMessages.appendChild(messageElement);
 
   // Add copy buttons to code blocks
-  const codeBlocks = messageElement.querySelectorAll('pre code');
+  const codeBlocks = messageElement.querySelectorAll("pre code");
   codeBlocks.forEach((codeBlock, index) => {
     const pre = codeBlock.parentNode;
 
     // Create wrapper div
-    const wrapper = document.createElement('div');
-    wrapper.className = 'code-block-wrapper';
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-block-wrapper";
     pre.parentNode.insertBefore(wrapper, pre);
     wrapper.appendChild(pre);
 
     // Add copy button
-    const copyButton = document.createElement('button');
-    copyButton.className = 'code-copy-btn';
-    copyButton.textContent = 'Copy';
+    const copyButton = document.createElement("button");
+    copyButton.className = "code-copy-btn";
+    copyButton.textContent = "Copy";
     copyButton.dataset.index = index;
 
-    copyButton.addEventListener('click', () => {
+    copyButton.addEventListener("click", () => {
       const code = codeBlock.textContent;
-      navigator.clipboard.writeText(code).then(() => {
-        copyButton.textContent = 'Copied!';
-        setTimeout(() => {
-          copyButton.textContent = 'Copy';
-        }, 2000);
-      }).catch(err => {
-        console.error('Failed to copy code:', err);
-      });
+      navigator.clipboard
+        .writeText(code)
+        .then(() => {
+          copyButton.textContent = "Copied!";
+          setTimeout(() => {
+            copyButton.textContent = "Copy";
+          }, 2000);
+        })
+        .catch((err) => {
+          console.error("Failed to copy code:", err);
+        });
     });
 
     wrapper.insertBefore(copyButton, pre);
@@ -462,8 +480,8 @@ function displayAssistantMessage(message) {
 
 // Display error message
 function displayError(message) {
-  const errorElement = document.createElement('div');
-  errorElement.className = 'error-message';
+  const errorElement = document.createElement("div");
+  errorElement.className = "error-message";
   errorElement.textContent = message;
 
   chatMessages.appendChild(errorElement);
@@ -480,7 +498,7 @@ function displayError(message) {
 // Export chat as markdown
 async function exportChat() {
   if (!currentChatId || !chatHistory[currentChatId].messages.length) {
-    displayError('No chat to export.');
+    displayError("No chat to export.");
     return;
   }
 
@@ -489,8 +507,8 @@ async function exportChat() {
     let markdown = `# ${chatHistory[currentChatId].title}\n\n`;
     markdown += `Exported on ${new Date().toLocaleString()}\n\n`;
 
-    chatHistory[currentChatId].messages.forEach(msg => {
-      if (msg.role === 'user') {
+    chatHistory[currentChatId].messages.forEach((msg) => {
+      if (msg.role === "user") {
         markdown += `## You\n\n${msg.content}\n\n`;
       } else {
         markdown += `## Claude\n\n${msg.content}\n\n`;
@@ -498,12 +516,13 @@ async function exportChat() {
     });
 
     // Open save dialog
-    const result = await ipcRenderer.invoke('export-chat-dialog', markdown);
+    const result = await ipcRenderer.invoke("export-chat-dialog", markdown);
 
     if (result.success) {
       // Show temporary success message
-      const successElement = document.createElement('div');
-      successElement.style.cssText = 'background-color: #e8f5e9; color: #2e7d32; padding: 12px; margin-bottom: 12px; border-radius: 4px;';
+      const successElement = document.createElement("div");
+      successElement.style.cssText =
+        "background-color: #e8f5e9; color: #2e7d32; padding: 12px; margin-bottom: 12px; border-radius: 4px;";
       successElement.textContent = `Chat exported to ${result.path}`;
 
       chatMessages.appendChild(successElement);
@@ -514,14 +533,14 @@ async function exportChat() {
           chatMessages.removeChild(successElement);
         }
       }, 5000);
-    } else if (result.error !== 'Export cancelled') {
+    } else if (result.error !== "Export cancelled") {
       displayError(`Failed to export chat: ${result.error}`);
     }
   } catch (error) {
-    console.error('Export error:', error);
-    displayError('Failed to export chat. Please try again.');
+    console.error("Export error:", error);
+    displayError("Failed to export chat. Please try again.");
   }
 }
 
 // Start the app
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener("DOMContentLoaded", init);
