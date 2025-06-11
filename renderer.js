@@ -36,6 +36,7 @@ const apiKeyInput = document.getElementById("api-key");
 const modelSelect = document.getElementById("model-select");
 const chatHistoryContainer = document.getElementById("chat-history");
 const exportChatButton = document.getElementById("export-chat-btn");
+const searchChatsInput = document.getElementById("search-chats-input");
 
 // Initialize the app
 async function init() {
@@ -139,6 +140,11 @@ function setupEventListeners() {
     settingsModal.style.display = "flex";
   });
 
+  // Search input listener
+  searchChatsInput.addEventListener('input', () => {
+    updateChatHistorySidebar(); // Re-render sidebar with filter
+  });
+
   ipcRenderer.on("export-chat", exportChat);
 }
 
@@ -187,34 +193,62 @@ async function createNewChat() {
 // Update the chat history sidebar
 function updateChatHistorySidebar() {
   chatHistoryContainer.innerHTML = "";
+  const searchTerm = searchChatsInput.value.trim().toLowerCase();
 
-  Object.keys(chatHistory).forEach((chatId) => {
+  // Sort chat IDs by timestamp (newest first) before filtering
+  const sortedChatIds = Object.keys(chatHistory).sort(
+    (a, b) => parseInt(b) - parseInt(a)
+  );
+
+  sortedChatIds.forEach((chatId) => {
     const chat = chatHistory[chatId];
-    const chatItem = document.createElement("div");
-    chatItem.className = `chat-item-container ${
-      chatId === currentChatId ? "active" : ""
-    }`;
-    chatItem.dataset.chatId = chatId;
+    let isMatch = false;
 
-    const titleSpan = document.createElement("span");
-    titleSpan.className = "chat-item-title";
-    titleSpan.textContent = chat.title;
-    titleSpan.addEventListener("click", () => {
-      loadChat(chatId);
-    });
+    if (!searchTerm) {
+      isMatch = true; // Show all if search term is empty
+    } else {
+      // Check title
+      if (chat.title.toLowerCase().includes(searchTerm)) {
+        isMatch = true;
+      }
+      // Check messages if title didn't match
+      if (!isMatch) {
+        for (const message of chat.messages) {
+          if (message.content.toLowerCase().includes(searchTerm)) {
+            isMatch = true;
+            break; // Found a match in messages
+          }
+        }
+      }
+    }
 
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "chat-item-delete-btn";
-    deleteButton.innerHTML = "&#10005;"; // Cross mark
-    deleteButton.title = "Delete Chat";
-    deleteButton.addEventListener("click", (event) => {
-      event.stopPropagation(); // Prevent chatItem click event
-      deleteChat(chatId);
-    });
+    if (isMatch) {
+      const chatItem = document.createElement("div");
+      chatItem.className = `chat-item-container ${
+        chatId === currentChatId ? "active" : ""
+      }`;
+      chatItem.dataset.chatId = chatId;
 
-    chatItem.appendChild(titleSpan);
-    chatItem.appendChild(deleteButton);
-    chatHistoryContainer.appendChild(chatItem);
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "chat-item-title";
+      titleSpan.textContent = chat.title;
+      titleSpan.addEventListener("click", () => {
+        loadChat(chatId);
+      });
+
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "chat-item-delete-btn";
+      deleteButton.innerHTML = "&#10005;"; // Cross mark
+      deleteButton.title = "Delete Chat";
+      deleteButton.addEventListener("click", (event) => {
+        event.stopPropagation(); // Prevent chatItem click event
+        deleteChat(chatId);
+      });
+
+      chatItem.appendChild(titleSpan);
+      chatItem.appendChild(deleteButton);
+      chatHistoryContainer.appendChild(chatItem);
+    }
   });
 }
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Claude Chat</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="node_modules/highlight.js/styles/github.css">
+  <link rel="stylesheet" href="node_modules/highlight.js/styles/atom-one-light.css">
 </head>
 <body>
   <div class="app-container">
@@ -39,6 +39,9 @@
       <div class="sidebar-header">
         <h2>Claude Chat</h2>
         <button id="new-chat" class="primary-button">New Chat</button>
+      </div>
+      <div class="search-bar-container">
+        <input type="text" id="search-chats-input" placeholder="Search chats..." class="search-input">
       </div>
       <div class="chat-history" id="chat-history">
         <!-- Chat history will be populated here -->
