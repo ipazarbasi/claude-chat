@@ -22,6 +22,8 @@ let selectedModel = "claude-3-7-sonnet-latest";
 let currentChatId = null;
 let chatHistory = {};
 let isWaitingForResponse = false;
+let foundMatches = [];
+let currentMatchIndex = -1;
 
 // DOM Elements
 const chatMessages = document.getElementById("chat-messages");
@@ -37,6 +39,14 @@ const modelSelect = document.getElementById("model-select");
 const chatHistoryContainer = document.getElementById("chat-history");
 const exportChatButton = document.getElementById("export-chat-btn");
 const searchChatsInput = document.getElementById("search-chats-input");
+const findBar = document.getElementById("find-bar");
+const findInput = document.getElementById("find-input");
+const findResultsCount = document.getElementById("find-results-count");
+const findPrevBtn = document.getElementById("find-prev-btn");
+const findNextBtn = document.getElementById("find-next-btn");
+const findWholeWordCheckbox =
+  document.getElementById("find-whole-word-checkbox");
+const findCloseBtn = document.getElementById("find-close-btn");
 
 // Initialize the app
 async function init() {
@@ -137,6 +147,46 @@ function setupEventListeners() {
   });
 
   ipcRenderer.on("export-chat", exportChat);
+
+  // --- Find in page listeners ---
+  ipcRenderer.on("open-find", openFindBar);
+
+  findCloseBtn.addEventListener("click", closeFindBar);
+
+  findInput.addEventListener("input", performFind);
+  findWholeWordCheckbox.addEventListener("change", performFind);
+
+  findNextBtn.addEventListener("click", () => {
+    if (foundMatches.length > 0) {
+      navigateToMatch((currentMatchIndex + 1) % foundMatches.length);
+    }
+  });
+
+  findPrevBtn.addEventListener("click", () => {
+    if (foundMatches.length > 0) {
+      navigateToMatch(
+        (currentMatchIndex - 1 + foundMatches.length) % foundMatches.length
+      );
+    }
+  });
+
+  findInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (e.shiftKey) {
+        findPrevBtn.click();
+      } else {
+        findNextBtn.click();
+      }
+    }
+  });
+
+  // Global listener to close find bar with Escape key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && findBar.style.display !== "none") {
+      closeFindBar();
+    }
+  });
 }
 
 // Save chat history to store
@@ -151,6 +201,7 @@ async function saveCurrentChatHistory() {
 
 // Create a new chat
 async function createNewChat() {
+  closeFindBar(); // Close find bar for a new chat
   const previousChatId = currentChatId; // Store current before overwriting
   cleanupPreviousEmptyNewChat(previousChatId); // Clean up if previous was an empty new chat
 
@@ -247,6 +298,7 @@ function updateChatHistorySidebar() {
 function loadChat(chatId) {
   // No longer needs to be async
   if (!chatHistory[chatId] || currentChatId === chatId) return;
+  closeFindBar(); // Close find bar when loading another chat
 
   const previousChatId = currentChatId;
   if (previousChatId !== chatId) {
@@ -595,6 +647,150 @@ async function exportChat() {
     console.error("Export error:", error);
     displayError("Failed to export chat. Please try again.");
   }
+}
+
+// --- Find in Page Functions ---
+
+function openFindBar() {
+  findBar.style.display = "flex";
+  findInput.focus();
+  findInput.select();
+}
+
+function closeFindBar() {
+  findBar.style.display = "none";
+  findInput.value = "";
+  clearHighlights();
+}
+
+function clearHighlights() {
+  const marks = chatMessages.querySelectorAll("mark");
+  marks.forEach((mark) => {
+    const parent = mark.parentNode;
+    if (parent) {
+      parent.replaceChild(document.createTextNode(mark.textContent), mark);
+      parent.normalize(); // Merges adjacent text nodes
+    }
+  });
+  foundMatches = [];
+  currentMatchIndex = -1;
+  updateFindResultsCount();
+}
+
+function performFind() {
+  clearHighlights();
+  const searchTerm = findInput.value;
+  if (!searchTerm) {
+    updateFindResultsCount();
+    return;
+  }
+
+  const wholeWord = findWholeWordCheckbox.checked;
+  // Escape special regex characters in the search term
+  const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = wholeWord ? `\\b${escapedTerm}\\b` : escapedTerm;
+  const regex = new RegExp(pattern, "gi"); // g: global, i: case-insensitive
+
+  const messageTexts = chatMessages.querySelectorAll(".message-text");
+  const matches = [];
+
+  messageTexts.forEach((container) => {
+    // Walk the DOM to find text nodes, avoiding modification of the HTML structure
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      // Don't search in scripts or styles if they exist, or inside our own marks
+      if (
+        node.parentNode.tagName !== "SCRIPT" &&
+        node.parentNode.tagName !== "STYLE" &&
+        node.parentNode.tagName !== "MARK"
+      ) {
+        nodes.push(node);
+      }
+    }
+
+    nodes.forEach((textNode) => {
+      const text = textNode.textContent;
+      const localMatches = [...text.matchAll(regex)];
+
+      if (localMatches.length > 0) {
+        const parent = textNode.parentNode;
+        let lastIndex = 0;
+
+        localMatches.forEach((match) => {
+          const foundText = match[0];
+          const startIndex = match.index;
+
+          if (startIndex > lastIndex) {
+            parent.insertBefore(
+              document.createTextNode(text.substring(lastIndex, startIndex)),
+              textNode
+            );
+          }
+
+          const mark = document.createElement("mark");
+          mark.textContent = foundText;
+          matches.push(mark);
+          parent.insertBefore(mark, textNode);
+
+          lastIndex = startIndex + foundText.length;
+        });
+
+        if (lastIndex < text.length) {
+          parent.insertBefore(
+            document.createTextNode(text.substring(lastIndex)),
+            textNode
+          );
+        }
+
+        parent.removeChild(textNode);
+      }
+    });
+  });
+
+  foundMatches = matches;
+  updateFindResultsCount();
+
+  if (foundMatches.length > 0) {
+    navigateToMatch(0);
+  }
+}
+
+function updateFindResultsCount() {
+  if (findInput.value && foundMatches.length > 0) {
+    findResultsCount.textContent = `${currentMatchIndex + 1} of ${
+      foundMatches.length
+    }`;
+  } else if (findInput.value) {
+    findResultsCount.textContent = "0 of 0";
+  } else {
+    findResultsCount.textContent = "";
+  }
+}
+
+function navigateToMatch(index) {
+  if (currentMatchIndex > -1 && foundMatches[currentMatchIndex]) {
+    foundMatches[currentMatchIndex].classList.remove("current-match");
+  }
+
+  currentMatchIndex = index;
+
+  if (currentMatchIndex > -1 && foundMatches[currentMatchIndex]) {
+    const currentMatchElement = foundMatches[currentMatchIndex];
+    currentMatchElement.classList.add("current-match");
+    currentMatchElement.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+  }
+  updateFindResultsCount();
 }
 
 // Start the app

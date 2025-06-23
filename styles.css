@@ -476,3 +476,115 @@ button {
 .chat-item-delete-btn:hover {
   color: #ff6b6b; /* Example hover color */
 }
+
+/* =================================== */
+/* Find in Chat Bar & Highlighting     */
+/* =================================== */
+
+/* --- Find Bar Container --- */
+.find-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100; /* Ensure it's above chat content */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background-color: #f8f9fa; /* A light, clean background */
+  border-bottom: 1px solid #e9ecef;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: top 0.3s ease-in-out;
+}
+
+/* --- Find Input Field --- */
+.find-bar .search-input {
+  flex-grow: 1;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.find-bar .search-input:focus {
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* --- Results Counter --- */
+#find-results-count {
+  font-size: 13px;
+  color: #6c757d; /* A muted grey */
+  min-width: 75px;
+  text-align: right;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+
+/* --- Navigation & Close Buttons --- */
+.find-nav-button,
+.find-close-button {
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.find-nav-button:hover,
+.find-close-button:hover {
+  background-color: #e9ecef;
+  color: #212529;
+}
+
+.find-nav-button {
+  font-size: 20px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+}
+
+.find-close-button {
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+  padding: 0 8px;
+}
+
+/* --- "Whole Word" Option --- */
+.find-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #495057;
+  padding-left: 12px;
+  border-left: 1px solid #dee2e6;
+}
+
+#find-whole-word-checkbox {
+  margin: 0;
+  cursor: pointer;
+  /* For better vertical alignment with the label */
+  transform: translateY(1px);
+}
+
+/* --- Highlighting Styles --- */
+mark {
+  background-color: #fef08a; /* Softer yellow */
+  color: inherit;
+  border-radius: 3px;
+  padding: 0; /* No padding to prevent gaps and baseline shifts */
+  transition: background-color 0.3s ease;
+}
+
+mark.current-match {
+  background-color: #f97316; /* Bright orange for current match */
+  color: white;
+}

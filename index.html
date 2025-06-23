@@ -54,6 +54,17 @@
 
     <!-- Main Chat Area -->
     <div class="chat-container">
+      <div class="find-bar" id="find-bar" style="display: none">
+        <input type="text" id="find-input" placeholder="Find in chat..." class="search-input">
+        <span id="find-results-count"></span>
+        <button id="find-prev-btn" class="find-nav-button" title="Previous match">&uarr;</button>
+        <button id="find-next-btn" class="find-nav-button" title="Next match">&darr;</button>
+        <div class="find-options">
+          <input type="checkbox" id="find-whole-word-checkbox" />
+          <label for="find-whole-word-checkbox">Whole word</label>
+        </div>
+        <button id="find-close-btn" class="find-close-button" title="Close">&times;</button>
+      </div>
       <div class="chat-messages" id="chat-messages">
         <div class="welcome-message">
           <h1>Welcome to Claude Chat</h1>

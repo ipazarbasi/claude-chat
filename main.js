@@ -61,6 +61,11 @@ async function createWindow() {
         { role: "paste" },
         { role: "delete" },
         { type: "separator" },
+        {
+          label: "Find",
+          accelerator: "CmdOrCtrl+F",
+          click: () => mainWindow.webContents.send("open-find"),
+        },
         { role: "selectAll" },
       ],
     },
