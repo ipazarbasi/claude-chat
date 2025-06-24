@@ -115,6 +115,14 @@ const findCloseBtn = document.getElementById("find-close-btn");
 async function init() {
   try {
     apiKey = await ipcRenderer.invoke("get-api-key");
+    
+    // Load saved model selection
+    const savedModel = await ipcRenderer.invoke("get-selected-model");
+    if (savedModel) {
+      selectedModel = savedModel;
+      modelSelect.value = savedModel;
+    }
+    
     if (apiKey) {
       initializeAnthropicClient(apiKey);
       apiKeyInput.value = apiKey;
@@ -405,6 +413,7 @@ async function saveSettings() {
   if (newApiKey) {
     try {
       await ipcRenderer.invoke("save-api-key", newApiKey);
+      await ipcRenderer.invoke("save-selected-model", selectedModel);
       apiKey = newApiKey;
       initializeAnthropicClient(apiKey);
       sendButton.disabled = false;
@@ -524,6 +533,7 @@ async function sendMessage() {
       const apiOptions = {
         model: selectedModel,
         max_tokens: modelConfig.maxTokens,
+        stream: true,
         messages: chatHistory[currentChatId].messages.map((msg) => ({
           role: msg.role,
           content: msg.content,
@@ -532,10 +542,16 @@ async function sendMessage() {
           "You are Claude, an AI assistant made by Anthropic. You're running in a custom Electron chat app.",
       };
 
+      // Remove loading indicator and create streaming message container
+      chatMessages.removeChild(loadingElement);
+      const { messageElement, textElement } = createStreamingAssistantMessage();
+      
+      let fullResponse = "";
+      let stopReason = null;
+
       // Add beta headers if required for the model
       if (Object.keys(modelConfig.betaHeaders).length > 0) {
-        // The Anthropic SDK doesn't directly support custom headers in the create method
-        // We need to use the raw client with custom headers
+        // Handle streaming for models with beta headers (raw fetch)
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -555,37 +571,74 @@ async function sendMessage() {
           };
         }
 
-        const responseData = await resp.json();
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
 
-        // Process response to match SDK format
-        const processedResponse = {
-          content: responseData.content,
-          stop_reason: responseData.stop_reason
-        };
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        var response = processedResponse;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.type === 'content_block_delta') {
+                  const textDelta = parsed.delta.text;
+                  if (textDelta) {
+                    fullResponse += textDelta;
+                    updateStreamingMessage(textElement, fullResponse);
+                  }
+                } else if (parsed.type === 'message_delta') {
+                  stopReason = parsed.delta.stop_reason;
+                }
+              } catch (e) {
+                // Skip invalid JSON
+              }
+            }
+          }
+        }
       } else {
-        // Use standard SDK call for models without beta headers
-        var response = await anthropicClient.messages.create(apiOptions);
+        // Handle streaming for models without beta headers (SDK)
+        const stream = await anthropicClient.messages.stream(apiOptions);
+
+        for await (const chunk of stream) {
+          if (chunk.type === 'content_block_delta') {
+            const textDelta = chunk.delta.text;
+            if (textDelta) {
+              fullResponse += textDelta;
+              updateStreamingMessage(textElement, fullResponse);
+            }
+          } else if (chunk.type === 'message_stop') {
+            stopReason = chunk.message?.stop_reason;
+          }
+        }
       }
 
-      // Remove loading indicator
-      chatMessages.removeChild(loadingElement);
-
-      // Process and display the response
-      const assistantResponse = response.content[0].text;
-      displayAssistantMessage(assistantResponse, response.stop_reason === "max_tokens");
+      // Finalize the streaming message
+      finalizeStreamingMessage(messageElement, stopReason === "max_tokens");
 
       // Add assistant message to chat history
       chatHistory[currentChatId].messages.push({
         role: "assistant",
-        content: assistantResponse,
-        stop_reason: response.stop_reason,
+        content: fullResponse,
+        stop_reason: stopReason,
       });
       await saveCurrentChatHistory(); // Save after adding assistant's message
     } catch (error) {
-      // Remove loading indicator
-      chatMessages.removeChild(loadingElement);
+      // Remove loading indicator or streaming message if they exist
+      try {
+        if (loadingElement && chatMessages.contains(loadingElement)) {
+          chatMessages.removeChild(loadingElement);
+        }
+      } catch (e) {
+        // Loading element might already be removed, ignore
+      }
 
       // Handle API errors
       console.error("API Error:", error);
@@ -663,6 +716,99 @@ function displayAssistantMessage(message, wasTruncated = false) {
 
   chatMessages.appendChild(messageElement);
 
+  // Add a persistent warning if the message was truncated by the API
+  if (wasTruncated) {
+    const warningElement = document.createElement("div");
+    warningElement.className = "warning-message";
+    warningElement.textContent =
+      "Warning: This response was truncated by the API because it reached the maximum token limit.";
+    // Append it inside the bubble for better association with the message
+    messageElement.querySelector(".message-bubble").appendChild(warningElement);
+  }
+
+  // Add copy buttons to code blocks
+  const codeBlocks = messageElement.querySelectorAll("pre code");
+  codeBlocks.forEach((codeBlock) => {
+    const pre = codeBlock.parentNode;
+
+    // Create wrapper div
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-block-wrapper";
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+
+    // Add copy button
+    const copyButton = document.createElement("button");
+    copyButton.className = "code-copy-btn";
+    const copyIconSVG = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="display: block; margin: auto;">
+        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+      </svg>`;
+    copyButton.innerHTML = copyIconSVG;
+    copyButton.title = "Copy code";
+
+    copyButton.addEventListener("click", () => {
+      const code = codeBlock.textContent;
+      navigator.clipboard
+        .writeText(code)
+        .then(() => {
+          copyButton.textContent = "Copied!";
+          setTimeout(() => {
+            copyButton.innerHTML = copyIconSVG;
+          }, 2000);
+        })
+        .catch((err) => {
+          console.error("Failed to copy code:", err);
+        });
+    });
+
+    wrapper.insertBefore(copyButton, pre);
+  });
+
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Create streaming assistant message container
+function createStreamingAssistantMessage() {
+  const messageElement = document.createElement("div");
+  messageElement.className = "message assistant-message";
+
+  const bubble = document.createElement("div");
+  bubble.className = "message-bubble assistant-bubble";
+
+  const header = document.createElement("div");
+  header.className = "message-header";
+  header.textContent = "Claude";
+
+  const text = document.createElement("div");
+  text.className = "message-text";
+
+  bubble.appendChild(header);
+  bubble.appendChild(text);
+  messageElement.appendChild(bubble);
+
+  // Remove welcome message if it exists
+  const welcomeMessage = document.querySelector(".welcome-message");
+  if (welcomeMessage) {
+    chatMessages.removeChild(welcomeMessage);
+  }
+
+  chatMessages.appendChild(messageElement);
+  return { messageElement, textElement: text };
+}
+
+// Update streaming message content
+function updateStreamingMessage(textElement, content) {
+  // Process markdown
+  const renderedMarkdown = marked(content);
+  textElement.innerHTML = renderedMarkdown;
+  
+  // Scroll to bottom
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Finalize streaming message (add copy buttons, etc.)
+function finalizeStreamingMessage(messageElement, wasTruncated = false) {
   // Add a persistent warning if the message was truncated by the API
   if (wasTruncated) {
     const warningElement = document.createElement("div");

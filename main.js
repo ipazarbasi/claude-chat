@@ -156,3 +156,13 @@ ipcMain.handle("save-chat-history", async (event, history) => {
 ipcMain.handle("get-chat-history", async (event) => {
   return store.get("chatHistory");
 });
+
+// Handle selected model storage
+ipcMain.handle("save-selected-model", async (event, selectedModel) => {
+  store.set("selectedModel", selectedModel);
+  return true;
+});
+
+ipcMain.handle("get-selected-model", async (event) => {
+  return store.get("selectedModel");
+});
