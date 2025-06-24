@@ -3,6 +3,7 @@ const { Anthropic } = require("@anthropic-ai/sdk");
 const { marked } = require("marked");
 const { markedHighlight } = require("marked-highlight");
 const hljs = require("highlight.js");
+const DOMPurify = require("dompurify");
 
 // Configure marked with syntax highlighting
 marked.use(
@@ -407,8 +408,11 @@ function cleanupPreviousEmptyNewChat(chatIdToClean) {
 
 // Send message
 async function sendMessage() {
-  const message = userInput.value.trim();
-  if (!message || !apiKey || isWaitingForResponse) return;
+  const message = userInput.value;
+  // Validate using the trimmed value, but use the raw value to preserve whitespace.
+  if (!message.trim() || !apiKey || isWaitingForResponse) {
+    return;
+  }
 
   try {
     // Display user message
@@ -509,12 +513,22 @@ async function sendMessage() {
 function displayUserMessage(message) {
   const messageElement = document.createElement("div");
   messageElement.className = "message user-message";
-  messageElement.innerHTML = `
-    <div class="message-bubble user-bubble">
-      <div class="message-header">You</div>
-      <div class="message-text">${message}</div>
-    </div>
-  `;
+
+  const bubble = document.createElement("div");
+  bubble.className = "message-bubble user-bubble";
+
+  const header = document.createElement("div");
+  header.className = "message-header";
+  header.textContent = "You";
+
+  const text = document.createElement("div");
+  text.className = "message-text";
+  // Render user's message as markdown, but sanitize it first to prevent XSS.
+  text.innerHTML = DOMPurify.sanitize(marked(message));
+
+  bubble.appendChild(header);
+  bubble.appendChild(text);
+  messageElement.appendChild(bubble);
 
   // Remove welcome message if it exists
   const welcomeMessage = document.querySelector(".welcome-message");
