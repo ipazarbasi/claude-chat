@@ -26,6 +26,68 @@ let isWaitingForResponse = false;
 let foundMatches = [];
 let currentMatchIndex = -1;
 
+// Model configuration with max_tokens and beta headers
+const MODEL_CONFIG = {
+  "claude-opus-4-20250514": {
+    maxTokens: 8192,
+    betaHeaders: {}
+  },
+  "claude-sonnet-4-20250514": {
+    maxTokens: 8192,
+    betaHeaders: {}
+  },
+  "claude-3-7-sonnet-latest": {
+    maxTokens: 128000,
+    betaHeaders: {
+      "anthropic-beta": "output-128k-2025-02-19"
+    }
+  },
+  "claude-3-7-sonnet-20250219": {
+    maxTokens: 128000,
+    betaHeaders: {
+      "anthropic-beta": "output-128k-2025-02-19"
+    }
+  },
+  "claude-3-5-sonnet-20241022": {
+    maxTokens: 8192,
+    betaHeaders: {
+      "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
+    }
+  },
+  "claude-3-5-sonnet-20240620": {
+    maxTokens: 8192,
+    betaHeaders: {
+      "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
+    }
+  },
+  "claude-3-5-sonnet-latest": {
+    maxTokens: 8192,
+    betaHeaders: {
+      "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
+    }
+  },
+  "claude-3-opus-20240229": {
+    maxTokens: 4096,
+    betaHeaders: {}
+  },
+  "claude-3-opus-latest": {
+    maxTokens: 4096,
+    betaHeaders: {}
+  },
+  "claude-3-5-haiku-20241022": {
+    maxTokens: 4096,
+    betaHeaders: {}
+  },
+  "claude-3-5-haiku-latest": {
+    maxTokens: 4096,
+    betaHeaders: {}
+  },
+  "claude-3-haiku-20240307": {
+    maxTokens: 4096,
+    betaHeaders: {}
+  }
+};
+
 // DOM Elements
 const chatMessages = document.getElementById("chat-messages");
 const userInput = document.getElementById("user-input");
@@ -452,17 +514,60 @@ async function sendMessage() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
     try {
-      // Call Claude API
-      const response = await anthropicClient.messages.create({
+      // Get model-specific configuration
+      const modelConfig = MODEL_CONFIG[selectedModel] || {
+        maxTokens: 4096,
+        betaHeaders: {}
+      };
+
+      // Prepare API call options
+      const apiOptions = {
         model: selectedModel,
-        max_tokens: 64000,
+        max_tokens: modelConfig.maxTokens,
         messages: chatHistory[currentChatId].messages.map((msg) => ({
           role: msg.role,
           content: msg.content,
         })),
         system:
           "You are Claude, an AI assistant made by Anthropic. You're running in a custom Electron chat app.",
-      });
+      };
+
+      // Add beta headers if required for the model
+      if (Object.keys(modelConfig.betaHeaders).length > 0) {
+        // The Anthropic SDK doesn't directly support custom headers in the create method
+        // We need to use the raw client with custom headers
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'anthropic-version': '2023-06-01',
+            ...modelConfig.betaHeaders
+          },
+          body: JSON.stringify(apiOptions)
+        });
+
+        if (!resp.ok) {
+          const errorData = await resp.json();
+          throw {
+            status: resp.status,
+            response: { data: errorData }
+          };
+        }
+
+        const responseData = await resp.json();
+
+        // Process response to match SDK format
+        const processedResponse = {
+          content: responseData.content,
+          stop_reason: responseData.stop_reason
+        };
+
+        var response = processedResponse;
+      } else {
+        // Use standard SDK call for models without beta headers
+        var response = await anthropicClient.messages.create(apiOptions);
+      }
 
       // Remove loading indicator
       chatMessages.removeChild(loadingElement);
@@ -570,7 +675,7 @@ function displayAssistantMessage(message, wasTruncated = false) {
 
   // Add copy buttons to code blocks
   const codeBlocks = messageElement.querySelectorAll("pre code");
-  codeBlocks.forEach((codeBlock, index) => {
+  codeBlocks.forEach((codeBlock) => {
     const pre = codeBlock.parentNode;
 
     // Create wrapper div
