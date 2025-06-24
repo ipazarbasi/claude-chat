@@ -328,7 +328,7 @@ function loadChat(chatId) {
       if (msg.role === "user") {
         displayUserMessage(msg.content);
       } else {
-        displayAssistantMessage(msg.content);
+        displayAssistantMessage(msg.content, msg.stop_reason === "max_tokens");
       }
     });
   }
@@ -469,12 +469,13 @@ async function sendMessage() {
 
       // Process and display the response
       const assistantResponse = response.content[0].text;
-      displayAssistantMessage(assistantResponse);
+      displayAssistantMessage(assistantResponse, response.stop_reason === "max_tokens");
 
       // Add assistant message to chat history
       chatHistory[currentChatId].messages.push({
         role: "assistant",
         content: assistantResponse,
+        stop_reason: response.stop_reason,
       });
       await saveCurrentChatHistory(); // Save after adding assistant's message
     } catch (error) {
@@ -541,7 +542,7 @@ function displayUserMessage(message) {
 }
 
 // Display assistant message
-function displayAssistantMessage(message) {
+function displayAssistantMessage(message, wasTruncated = false) {
   const messageElement = document.createElement("div");
   messageElement.className = "message assistant-message";
 
@@ -556,6 +557,16 @@ function displayAssistantMessage(message) {
   `;
 
   chatMessages.appendChild(messageElement);
+
+  // Add a persistent warning if the message was truncated by the API
+  if (wasTruncated) {
+    const warningElement = document.createElement("div");
+    warningElement.className = "warning-message";
+    warningElement.textContent =
+      "Warning: This response was truncated by the API because it reached the maximum token limit.";
+    // Append it inside the bubble for better association with the message
+    messageElement.querySelector(".message-bubble").appendChild(warningElement);
+  }
 
   // Add copy buttons to code blocks
   const codeBlocks = messageElement.querySelectorAll("pre code");
